@@ -1,0 +1,19 @@
+display_information:
+  name: slack-sporter
+oauth_config:
+  scopes:
+    user:
+      - channels:read
+      - channels:history
+      - groups:read
+      - groups:history
+      - mpim:history
+      - mpim:read
+      - im:read
+      - im:history
+      - users:read
+      - files:read
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
