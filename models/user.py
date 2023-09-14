@@ -1,5 +1,3 @@
-from typing import List, Any
-
 
 class Profile:
     title: str
@@ -12,7 +10,7 @@ class Profile:
     fields: any
     status_text: str
     status_emoji: str
-    status_emoji_display_info: List[Any]
+    status_emoji_display_info: list[any]
     status_expiration: int
     avatar_hash: str
     always_active: bool
@@ -27,7 +25,7 @@ class Profile:
     status_text_canonical: str
     team: str
 
-    def __init__(self, title: str, phone: str, skype: str, real_name: str, real_name_normalized: str, display_name: str, display_name_normalized: str, fields: any, status_text: str, status_emoji: str, status_emoji_display_info: List[Any], status_expiration: int, avatar_hash: str, always_active: bool, first_name: str, last_name: str, image_24: str, image_32: str, image_48: str, image_72: str, image_192: str, image_512: str, status_text_canonical: str, team: str) -> None:
+    def __init__(self, title: str, phone: str, skype: str, real_name: str, real_name_normalized: str, display_name: str, display_name_normalized: str, fields: any, status_text: str, status_emoji: str, status_emoji_display_info: list[any], status_expiration: int, avatar_hash: str, always_active: bool, first_name: str, last_name: str, image_24: str, image_32: str, image_48: str, image_72: str, image_192: str, image_512: str, status_text_canonical: str, team: str) -> None:
         self.title = title
         self.phone = phone
         self.skype = skype
