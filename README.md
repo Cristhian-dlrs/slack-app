@@ -17,7 +17,7 @@ There are two ways to use `slack-exporter` (detailed below). Both require a Slac
     ```text
     SLACK_USER_TOKEN = xoxp-xxxxxxxxxxxxx...
     ```
-    
-    to a file named `.env` in the same directory as `engine.py`, 
+    to a file named `.env` in the same directory as `engine.py`.
 
-2. Run `python engine.py --help` to view the available options.
+2. Run `pip install requirements.txt` to install the required dependencies.
+3. Run `python engine.py --help` to view the available options.

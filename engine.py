@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from pathvalidate import sanitize_filename
 from time import sleep
 import sqlite3
-import json
 
 
 DB_NAME = 'slack.db'
