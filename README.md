@@ -1,5 +1,5 @@
 
-## Authentication with Slack
+## Authentication
 
 There are two ways to use `slack-exporter` (detailed below). Both require a Slack API token to be able to communicate with your workspace.
 
