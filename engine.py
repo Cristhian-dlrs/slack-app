@@ -435,7 +435,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--init",
         action="store_true",
-        help="Initializes the database and seeds it with all slack users and channels",
+        help="Initializes de database exports all your data from slack",
     )
 
     parser.add_argument(
