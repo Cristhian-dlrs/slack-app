@@ -410,7 +410,6 @@ def init_app():
     db_execute_command(messages_table)
 
     print("Loading slack users...")
-
     users = user_list()
     save_users(users)
 
@@ -425,7 +424,7 @@ def init_app():
         data = channel_history(channel["id"])
         save_messages(channel["id"], data)
         count += 1
-    print("App initialization completed!")
+    print("Application initialization completed!")
 
 
 if __name__ == "__main__":
@@ -435,7 +434,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--init",
         action="store_true",
-        help="Initializes de database exports all your data from slack",
+        help="Exports all your data from slack",
     )
 
     parser.add_argument(
@@ -481,7 +480,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.init:
-        init_app()
+        try:
+            init_app()
+        except Exception as e:
+            if 'UNIQUE' in e.args[0]:
+                print(f"The application is already initialized")
+            else:
+                print(f"Failed to initialize the application due to {e.args}")
 
     if args.lc:
         res = get_channels(args.n) if args.n else get_channels()
