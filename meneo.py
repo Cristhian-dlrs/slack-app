@@ -51,7 +51,7 @@ def to_unixts(date_str):
 
 def from_unixts(ts):
     date = datetime.fromtimestamp(ts)
-    formatted_date = date.strftime("%d/%m/%Y")
+    formatted_date = date.strftime('%d/%m/%Y %H:%M:%S')
     return formatted_date
 
 # =================================================================================================
@@ -388,9 +388,36 @@ def get_messages(channel=None, fr=None, to=None):
 
     res = db_execute_query(query)
     messages = []
-    for channel in res:
+    for message in res:
         messages.append(
-            {'message': channel[0], 'user': channel[1], 'channel': channel[2], 'date': from_unixts(channel[3])})
+            {'message': message[0], 'user': message[1], 'channel': message[2], 'date': from_unixts(message[3])})
+    return messages
+
+
+def search_messages(search, channel=None):
+    query = ''
+    if channel is None:
+        query = f"""
+            SELECT messages.text, users.real_name, channels.name, messages.ts
+            from messages inner join users on messages.user = users.id
+            inner join channels on messages.channel = channels.id
+            WHERE messages.text LIKE '%{search}%'
+            ORDER BY messages.ts ASC
+            """
+    else:
+        query = f"""
+            SELECT messages.text, users.real_name, channels.name, messages.ts
+            from messages inner join users on messages.user = users.id
+            inner join channels on messages.channel = channels.id
+            WHERE channels.name = '{channel} AND messages.text LIKE '%{search}%'
+            ORDER BY messages.ts ASC
+            """
+
+    res = db_execute_query(query)
+    messages = []
+    for message in res:
+        messages.append(
+            {'message': message[0], 'user': message[1], 'channel': message[2], 'date': from_unixts(message[3])})
     return messages
 
 
@@ -501,6 +528,11 @@ def main():
     )
 
     parser.add_argument(
+        "-s",
+        help="With --msg, search for messages that contains the specified search term"
+    )
+
+    parser.add_argument(
         "--ch",
         help="With --msg, restrict messages to given channel name"
     )
@@ -556,9 +588,37 @@ def main():
         print(json.dumps(res, indent=4))
 
     if args.msg:
-        res = get_messages(
-            args.ch, to_unixts(args.fr), to_unixts(args.to)) if args.ch and args.fr and args.to else get_messages()
-        print(json.dumps(res, indent=4))
+        if args.s:
+            res = search_messages(args.s)
+            print(json.dumps(res, indent=4))
+
+        elif args.s and args.ch:
+            res = search_messages(args.s, args.ch)
+            print(json.dumps(res, indent=4))
+
+        elif args.ch and args.fr and args.to:
+            res = get_messages(args.ch, to_unixts(args.fr), to_unixts(args.to))
+            print(json.dumps(res, indent=4))
+
+        elif args.ch:
+            res = get_messages(args.ch)
+            print(json.dumps(res, indent=4))
+
+        elif args.to and args.fr:
+            res = get_messages(None, to_unixts(args.fr), to_unixts(args.to))
+            print(json.dumps(res, indent=4))
+
+        elif args.to:
+            res = get_messages(None, None, to_unixts(args.to))
+            print(json.dumps(res, indent=4))
+
+        elif args.fr:
+            res = get_messages(None, to_unixts(args.fr), None)
+            print(json.dumps(res, indent=4))
+
+        else:
+            res = get_messages()
+            print(json.dumps(res, indent=4))
 
 
 if __name__ == "__main__":
