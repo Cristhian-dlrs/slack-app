@@ -3,11 +3,10 @@ import os
 import sys
 import requests
 import json
-from timeit import default_timer
+import time
 from datetime import datetime
 import argparse
 from dotenv import load_dotenv
-from pathvalidate import sanitize_filename
 from time import sleep
 import sqlite3
 
@@ -46,6 +45,26 @@ except KeyError:
     handle_print(
         "Missing SLACK_USER_TOKEN in environment variables")
     sys.exit(1)
+
+
+def progressbar(it, prefix="", size=60, out=sys.stdout):
+    count = len(it)
+    start = time.time()
+
+    def show(j):
+        x = int(size*j/count)
+        remaining = ((time.time() - start) / j) * (count - j)
+
+        mins, sec = divmod(remaining, 60)
+        time_str = f"{int(mins):02}:{sec:05.2f}"
+
+        print(f"[{u'#'*x}{('.'*(size-x))}] {j}/{count} {prefix} Est wait {time_str}",
+              end='\r', file=out, flush=True)
+
+    for i, item in enumerate(it):
+        yield item
+        show(i+1)
+    print("\n", flush=True, file=out)
 
 
 def _get_data(url, params):
@@ -150,19 +169,6 @@ def channel_list(team_id=None, response_url=None):
     )
 
 
-def get_file_list():
-    current_page = 1
-    total_pages = 1
-    while current_page <= total_pages:
-        response = get_data("https://slack.com/api/files.list",
-                            params={"page": current_page})
-        json_data = response.json()
-        total_pages = json_data["paging"]["pages"]
-        for file in json_data["files"]:
-            yield file
-        current_page += 1
-
-
 def channel_history(channel_id, response_url=None, oldest=None, latest=None):
     params = {
         # "token": os.environ["SLACK_USER_TOKEN"],
@@ -254,9 +260,10 @@ def db_execute_many(sql_query, data):
 def save_users(data):
     insert_query = "INSERT INTO users Values(?, ?, ?, ?)"
     users = []
-    for user in data:
+    for user in progressbar(data, prefix='Loading users:'):
         users.append((user["id"], user["team_id"],
                       user["name"], user["profile"]["real_name"]))
+        time.sleep(0.001)
 
     db_execute_many(insert_query, users)
 
@@ -286,11 +293,12 @@ def save_channels(data):
                 return user["real_name"]
 
     channels = []
-    for channel in data:
+    for channel in progressbar(data, prefix='Loading channels:'):
         channels.append((channel["id"],
                          channel["name"] if "name" in channel
                          else user_name(channel["user"]),
                          channel["user"] if "user" in channel else "IS GROUP"))
+        time.sleep(0.001)
 
     insert_query = "INSERT INTO channels Values(?, ?, ?)"
     db_execute_many(insert_query, channels)
@@ -373,67 +381,104 @@ def get_messages(channel=None, fr=None, to=None):
     return messages
 
 
-def init_app():
-    print("Generating database...")
-    users_table = """
-        CREATE TABLE IF NOT EXISTS users(
-            id TEXT PRIMARY KEY,
-            team_id TEXT,
-            name TEXT,
-            real_name TEXT
-        );"""
+def init_db():
+    init_completed = None
+    last_loaded_history = None
 
-    channels_table = """
-        CREATE TABLE IF NOT EXISTS channels(
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            user TEXT,
-            FOREIGN KEY (user) REFERENCES users (id)
-        );"""
+    try:
+        config_query = "SELECT * FROM configs"
+        _, init_completed, last_loaded_history = db_execute_query(config_query)[
+            0]
+        return init_completed, last_loaded_history
+    except:
+        print("Initializing database...")
+        users_table = """
+            CREATE TABLE IF NOT EXISTS users(
+                id TEXT PRIMARY KEY,
+                team_id TEXT,
+                name TEXT,
+                real_name TEXT
+            );"""
 
-    messages_table = """
-        CREATE TABLE IF NOT EXISTS messages(
-            id TEXT,
-            type TEXT,
-            text TEXT,
-            ts INTEGER,
-            user TEXT,
-            channel TEXT,
-            PRIMARY KEY (channel, ts),
-            FOREIGN KEY (user) REFERENCES users (id),
-            FOREIGN KEY (channel) REFERENCES channels (id)
-        );"""
+        channels_table = """
+            CREATE TABLE IF NOT EXISTS channels(
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                user TEXT,
+                FOREIGN KEY (user) REFERENCES users (id)
+            );"""
 
-    db_execute_command(users_table)
-    db_execute_command(channels_table)
-    db_execute_command(messages_table)
+        messages_table = """
+            CREATE TABLE IF NOT EXISTS messages(
+                id TEXT,
+                type TEXT,
+                text TEXT,
+                ts INTEGER,
+                user TEXT,
+                channel TEXT,
+                PRIMARY KEY (channel, ts),
+                FOREIGN KEY (user) REFERENCES users (id),
+                FOREIGN KEY (channel) REFERENCES channels (id)
+            );"""
 
-    print("Loading slack users...")
-    users = user_list()
-    save_users(users)
+        config_table = """
+            CREATE TABLE IF NOT EXISTS configs(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                init_completed INTEGER,
+                last_loaded_history INTEGER
+            );"""
 
-    print("Loading slack channels...")
-    channels = channel_list()
-    save_channels(channels)
+        db_execute_command(users_table)
+        db_execute_command(channels_table)
+        db_execute_command(messages_table)
+        db_execute_command(config_table)
+        init_query = "INSERT INTO configs Values(null, 0, 0)"
+        db_execute_command(init_query)
+        return init_completed, last_loaded_history
 
-    print("Loading slack conversations, it may take a while...")
-    count = 1
-    for channel in channels:
-        print(f"{count} conversation loaded of {len(channels)}")
-        data = channel_history(channel["id"])
-        save_messages(channel["id"], data)
-        count += 1
+
+def export_slack_data():
+    init_completed, last_loaded_history = init_db()
+
+    if init_completed is None and last_loaded_history is None:
+        print("Exporting slack data...")
+        users = user_list()
+        save_users(users)
+
+        channels = channel_list()
+        save_channels(channels)
+
+        count = 1
+        for channel in progressbar(channels, prefix='Loading channel message history:'):
+            data = channel_history(channel["id"])
+            save_messages(channel["id"], data)
+            update_query = f"UPDATE configs SET last_loaded_history = {count} WHERE id = 1"
+            db_execute_command(update_query)
+            count += 1
+
+    elif init_completed == 0 and last_loaded_history > 0:
+        print("Exporting missing messages...")
+        channels = channel_list()
+        count = last_loaded_history
+        for channel in progressbar(channels[last_loaded_history:], prefix='Loading channel history:'):
+            data = channel_history(channel["id"])
+            save_messages(channel["id"], data)
+            count += 1
+            update_query = f"UPDATE configs SET last_loaded_history = {count} WHERE id = 1"
+            db_execute_command(update_query)
+
+    completion_query = f"UPDATE configs SET init_completed = 1 WHERE id = 1"
+    db_execute_command(completion_query)
     print("Application initialization completed!")
 
 
-if __name__ == "__main__":
-    # data = channel_history("CU616909X")
-    # print(json.dumps(data, indent=4))
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--init",
         action="store_true",
-        help="Exports all your data from slack",
+        help="Exports all your data from slack, you can stop the data loading process and start\
+              it again in any moment until full app initialization",
     )
 
     parser.add_argument(
@@ -480,12 +525,14 @@ if __name__ == "__main__":
 
     if args.init:
         try:
-            init_app()
+            export_slack_data()
         except Exception as e:
             if 'UNIQUE' in e.args[0]:
+                print(e.args)
                 print(f"The application is already initialized")
             else:
-                print(f"Failed to initialize the application due to {e.args}")
+                print(
+                    f"Failed to initialize the application due to an error {e.args[0]}")
 
     if args.lc:
         res = get_channels(args.n) if args.n else get_channels()
@@ -499,3 +546,14 @@ if __name__ == "__main__":
         res = get_messages(
             args.ch, args.fr, args.to) if args.ch else get_messages()
         print(json.dumps(res, indent=4))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print('\n\nDownload interrupted, you can continue downloading missing messages by running #elmeneo --init again.')
+        try:
+            sys.exit(130)
+        except SystemExit:
+            os._exit(130)
