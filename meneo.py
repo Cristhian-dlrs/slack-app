@@ -21,32 +21,8 @@ if os.path.isfile(env_file):
 
 
 # =================================================================================================
-# HTTP
+# UTILS
 # =================================================================================================
-def post_response(response_url, text):
-    requests.post(response_url, json={"text": text})
-
-
-# use this to say anything
-# will print to stdout if no response_url is given
-# or post_response to given url if provided
-def handle_print(text, response_url=None):
-    if response_url is None:
-        print(text)
-    else:
-        post_response(response_url, text)
-
-
-# slack api (OAuth 2.0) now requires auth tokens in HTTP Authorization header
-# instead of passing it as a query parameter
-try:
-    HEADERS = {"Authorization": "Bearer %s" % os.environ["SLACK_USER_TOKEN"]}
-except KeyError:
-    handle_print(
-        "Missing SLACK_USER_TOKEN in environment variables")
-    sys.exit(1)
-
-
 def progressbar(it, prefix="", size=60, out=sys.stdout):
     count = len(it)
     start = time.time()
@@ -65,6 +41,43 @@ def progressbar(it, prefix="", size=60, out=sys.stdout):
         yield item
         show(i+1)
     print("\n", flush=True, file=out)
+
+
+def to_unixts(date_str):
+    date = datetime.strptime(date_str, "%d/%m/%Y")
+    ts = int(date.timestamp())
+    return ts
+
+
+def from_unixts(ts):
+    date = datetime.fromtimestamp(ts)
+    formatted_date = date.strftime("%d/%m/%Y")
+    return formatted_date
+
+# =================================================================================================
+# HTTP
+# =================================================================================================
+
+
+def post_response(response_url, text):
+    requests.post(response_url, json={"text": text})
+
+
+def handle_print(text, response_url=None):
+    if response_url is None:
+        print(text)
+    else:
+        post_response(response_url, text)
+
+
+# slack api (OAuth 2.0) now requires auth tokens in HTTP Authorization header
+# instead of passing it as a query parameter
+try:
+    HEADERS = {"Authorization": "Bearer %s" % os.environ["SLACK_USER_TOKEN"]}
+except KeyError:
+    handle_print(
+        "Missing SLACK_USER_TOKEN in environment variables")
+    sys.exit(1)
 
 
 def _get_data(url, params):
@@ -377,7 +390,7 @@ def get_messages(channel=None, fr=None, to=None):
     messages = []
     for channel in res:
         messages.append(
-            {'message': channel[0], 'user': channel[1], 'channel': channel[2], 'ts': channel[3]})
+            {'message': channel[0], 'user': channel[1], 'channel': channel[2], 'date': from_unixts(channel[3])})
     return messages
 
 
@@ -494,12 +507,12 @@ def main():
 
     parser.add_argument(
         "--fr",
-        help="With --msg, Unix timestamp for earliest message",
+        help="With --msg, date for earliest message (dd/mm/yyyy)",
         type=str,
     )
     parser.add_argument(
         "--to",
-        help="With --msg, Unix timestamp for latest message",
+        help="With --msg, date for latest message (dd/mm/yyyy)",
         type=str,
     )
 
@@ -544,7 +557,7 @@ def main():
 
     if args.msg:
         res = get_messages(
-            args.ch, args.fr, args.to) if args.ch else get_messages()
+            args.ch, to_unixts(args.fr), to_unixts(args.to)) if args.ch and args.fr and args.to else get_messages()
         print(json.dumps(res, indent=4))
 
 
