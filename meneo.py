@@ -170,7 +170,6 @@ def paginated_get(url, params, combine_key=None, response_url=None):
 
 def channel_list(team_id=None, response_url=None):
     params = {
-        # "token": os.environ["SLACK_USER_TOKEN"],
         "team_id": team_id,
         "types": "public_channel,private_channel,mpim,im",
         "limit": 200,
@@ -186,7 +185,6 @@ def channel_list(team_id=None, response_url=None):
 
 def channel_history(channel_id, response_url=None, oldest=None, latest=None):
     params = {
-        # "token": os.environ["SLACK_USER_TOKEN"],
         "channel": channel_id,
         "limit": 200,
     }
@@ -206,7 +204,6 @@ def channel_history(channel_id, response_url=None, oldest=None, latest=None):
 
 def user_list(team_id=None, response_url=None):
     params = {
-        # "token": os.environ["SLACK_USER_TOKEN"],
         "limit": 200,
         "team_id": team_id,
     }
@@ -223,7 +220,6 @@ def channel_replies(timestamps, channel_id, response_url=None):
     replies = []
     for timestamp in timestamps:
         params = {
-            # "token": os.environ["SLACK_USER_TOKEN"],
             "channel": channel_id,
             "ts": timestamp,
             "limit": 200,
