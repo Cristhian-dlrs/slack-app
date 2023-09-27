@@ -603,7 +603,7 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print('\n\nDownload interrupted, you can continue downloading missing messages by running #elmeneo --init again.')
+        print('\n\nExited!')
         try:
             sys.exit(130)
         except SystemExit:
