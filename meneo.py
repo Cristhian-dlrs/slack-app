@@ -382,7 +382,7 @@ def get_messages(channel=None, fr=None, to=None):
         SELECT messages.text, users.real_name, channels.name, messages.ts
         from messages inner join users on messages.user = users.id
         inner join channels on messages.channel = channels.id
-        WHERE channels.name = '{channel} AND messages.fr > {fr}
+        WHERE channels.name = '{channel}' AND messages.fr > {fr}
         ORDER BY messages.ts ASC
         """
     elif channel is not None and fr is None and to is not None:
@@ -390,7 +390,7 @@ def get_messages(channel=None, fr=None, to=None):
         SELECT messages.text, users.real_name, channels.name, messages.ts
         from messages inner join users on messages.user = users.id
         inner join channels on messages.channel = channels.id
-        WHERE channels.name = '{channel} AND messages.fr < {to}
+        WHERE channels.name = '{channel}' AND messages.fr < {to}
         ORDER BY messages.ts ASC
         """
     elif channel is not None and fr is not None and to is not None:
@@ -398,7 +398,7 @@ def get_messages(channel=None, fr=None, to=None):
         SELECT messages.text, users.real_name, channels.name, messages.ts
         from messages inner join users on messages.user = users.id
         inner join channels on messages.channel = channels.id
-        WHERE channels.name = '{channel} AND messages.fr < {to} AND messages.fr < {to}
+        WHERE channels.name = '{channel}' AND messages.fr < {to} AND messages.fr < {to}
         ORDER BY messages.ts ASC
         """
 
