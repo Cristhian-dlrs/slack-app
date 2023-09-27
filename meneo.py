@@ -13,7 +13,8 @@ import sqlite3
 
 DB_NAME = 'slack.db'
 # when rate-limited, add this to the wait time
-ADDITIONAL_SLEEP_TIME = 10
+ADDITIONAL_SLEEP_TIME = 5
+RETRY_LIMIT = 10
 
 env_file = os.path.join(os.path.dirname(__file__), ".env")
 if os.path.isfile(env_file):
@@ -100,9 +101,14 @@ def get_data(url, params):
         else:
             retry_after = int(r.headers["Retry-After"])  # seconds to wait
             sleep_time = retry_after + ADDITIONAL_SLEEP_TIME
-            print(
-                f"Rate-limited. Retrying after {sleep_time} seconds ({attempt}x).")
             sleep(sleep_time)
+        if attempt >= RETRY_LIMIT:
+            print(
+                "Downloading process stopped due retry attempt limit, please continue later.")
+            try:
+                sys.exit(130)
+            except SystemExit:
+                os._exit(130)
     return r
 
 # =================================================================================================
@@ -160,10 +166,6 @@ def paginated_get(url, params, combine_key=None, response_url=None):
             break
 
     return result
-
-# =================================================================================================
-# GET requests
-# =================================================================================================
 
 
 def channel_list(team_id=None, response_url=None):
@@ -276,7 +278,7 @@ def save_users(data):
     for user in progressbar(data, prefix='Loading users:'):
         users.append((user["id"], user["team_id"],
                       user["name"], user["profile"]["real_name"]))
-        time.sleep(0.001)
+        time.sleep(0.01)
 
     db_execute_many(insert_query, users)
 
@@ -310,10 +312,11 @@ def save_channels(data):
         channels.append((channel["id"],
                          channel["name"] if "name" in channel
                          else user_name(channel["user"]),
-                         channel["user"] if "user" in channel else "IS GROUP"))
-        time.sleep(0.001)
+                         channel["user"] if "user" in channel else "IS GROUP",
+                         0))
+        time.sleep(0.01)
 
-    insert_query = "INSERT INTO channels Values(?, ?, ?)"
+    insert_query = "INSERT INTO channels Values(?, ?, ?, ?)"
     db_execute_many(insert_query, channels)
 
 
@@ -327,17 +330,30 @@ def get_channels(name=None):
     res = db_execute_query(query)
     channels = []
     for channel in res:
-        channels.append(
-            {'id': channel[0], 'chanel_name': channel[1], 'user': channel[2]})
+        channels.append({'id': channel[0], 'chanel_name': channel[1],
+                        'user': channel[2], 'is_loaded': channel[3]})
     return channels
+
+
+def export_channel_history(channel_name):
+    channel = get_channels(channel_name)[0]
+    if channel['is_loaded'] == 1:
+        print("Channel messages already loaded")
+        return
+
+    data = channel_history(channel['id'])
+    save_messages(channel['id'], data)
+    update_query = f"UPDATE channels SET loaded = 1 WHERE id = '{channel['id']}'"
+    db_execute_command(update_query)
 
 
 def save_messages(channel_id, data):
     messages = []
-    for message in data:
+    for message in progressbar(data, prefix='Loading messages:'):
         messages.append((message["client_msg_id"] if "client_msg_id" in message else "INFO",
                          message["type"], message["text"], message["ts"],
                          message["user"] if "user" in message else "UNKNOWN", channel_id))
+        time.sleep(0.0001)
 
     insert_query = "INSERT INTO messages Values(?, ?, ?, ?, ?, ?)"
     db_execute_many(insert_query, messages)
@@ -422,17 +438,8 @@ def search_messages(search, channel=None):
 
 
 def init_db():
-    init_completed = None
-    last_loaded_history = None
-
-    try:
-        config_query = "SELECT * FROM configs"
-        _, init_completed, last_loaded_history = db_execute_query(config_query)[
-            0]
-        return init_completed, last_loaded_history
-    except:
-        print("Initializing database...")
-        users_table = """
+    print("Initializing database...")
+    users_table = """
             CREATE TABLE IF NOT EXISTS users(
                 id TEXT PRIMARY KEY,
                 team_id TEXT,
@@ -440,15 +447,16 @@ def init_db():
                 real_name TEXT
             );"""
 
-        channels_table = """
+    channels_table = """
             CREATE TABLE IF NOT EXISTS channels(
                 id TEXT PRIMARY KEY,
                 name TEXT,
                 user TEXT,
+                loaded INTEGER,
                 FOREIGN KEY (user) REFERENCES users (id)
             );"""
 
-        messages_table = """
+    messages_table = """
             CREATE TABLE IF NOT EXISTS messages(
                 id TEXT,
                 type TEXT,
@@ -461,54 +469,20 @@ def init_db():
                 FOREIGN KEY (channel) REFERENCES channels (id)
             );"""
 
-        config_table = """
-            CREATE TABLE IF NOT EXISTS configs(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                init_completed INTEGER,
-                last_loaded_history INTEGER
-            );"""
-
-        db_execute_command(users_table)
-        db_execute_command(channels_table)
-        db_execute_command(messages_table)
-        db_execute_command(config_table)
-        init_query = "INSERT INTO configs Values(null, 0, 0)"
-        db_execute_command(init_query)
-        return init_completed, last_loaded_history
+    db_execute_command(users_table)
+    db_execute_command(channels_table)
+    db_execute_command(messages_table)
 
 
 def export_slack_data():
-    init_completed, last_loaded_history = init_db()
+    init_db()
 
-    if init_completed is None and last_loaded_history is None:
-        print("Exporting slack data...")
-        users = user_list()
-        save_users(users)
+    print("Exporting slack data...")
+    users = user_list()
+    save_users(users)
 
-        channels = channel_list()
-        save_channels(channels)
-
-        count = 1
-        for channel in progressbar(channels, prefix='Loading channel message history:'):
-            data = channel_history(channel["id"])
-            save_messages(channel["id"], data)
-            update_query = f"UPDATE configs SET last_loaded_history = {count} WHERE id = 1"
-            db_execute_command(update_query)
-            count += 1
-
-    elif init_completed == 0 and last_loaded_history > 0:
-        print("Exporting missing messages...")
-        channels = channel_list()
-        count = last_loaded_history
-        for channel in progressbar(channels[last_loaded_history:], prefix='Loading channel history:'):
-            data = channel_history(channel["id"])
-            save_messages(channel["id"], data)
-            count += 1
-            update_query = f"UPDATE configs SET last_loaded_history = {count} WHERE id = 1"
-            db_execute_command(update_query)
-
-    completion_query = f"UPDATE configs SET init_completed = 1 WHERE id = 1"
-    db_execute_command(completion_query)
+    channels = channel_list()
+    save_channels(channels)
     print("Application initialization completed!")
 
 
@@ -517,8 +491,13 @@ def main():
     parser.add_argument(
         "--init",
         action="store_true",
-        help="Exports all your data from slack, you can stop the data loading process and start\
-              it again in any moment until full app initialization",
+        help="Exports all users and channels from slack",
+    )
+
+    parser.add_argument(
+        "--dch",
+        action="store_true",
+        help="Exports the history of messages for a specific channel",
     )
 
     parser.add_argument(
@@ -562,8 +541,9 @@ def main():
 
     parser.add_argument(
         "-n",
-        help="Name of the channel to retrieve if called with --lc\
-            name of the user to retrieve if called with --lu"
+        help="Name of the channel to load history if called with --dch\
+              Name of the channel to retrieve if called with --lc\
+              Name of the user to retrieve if called with --lu"
     )
 
     args = parser.parse_args()
@@ -572,12 +552,10 @@ def main():
         try:
             export_slack_data()
         except Exception as e:
-            if 'UNIQUE' in e.args[0]:
-                print(e.args)
-                print(f"The application is already initialized")
-            else:
-                print(
-                    f"Failed to initialize the application due to an error {e.args[0]}")
+            print(f"The application is already initialized")
+
+    if args.dch:
+        export_channel_history(args.n)
 
     if args.lc:
         res = get_channels(args.n) if args.n else get_channels()
