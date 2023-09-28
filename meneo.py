@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import os
 import sys
+sys.path.insert(1, './database/', 1, "./database/migrations")
+
 import requests
 import json
 import time
@@ -9,7 +11,10 @@ import argparse
 from dotenv import load_dotenv
 from time import sleep
 import sqlite3
-
+import pyodbc
+import asyncio
+import connection
+import msqls
 
 DB_NAME = 'slack.db'
 # when rate-limited, add this to the wait time
@@ -239,13 +244,17 @@ def channel_replies(timestamps, channel_id, response_url=None):
 # =================================================================================================
 # SQL
 # =================================================================================================
+
+
 def db_execute_command(sql_command):
-    con = sqlite3.connect(DB_NAME)
+    con = connection.db_connection()
+    # con = sqlite3.connect(DB_NAME)
     cursor = con.cursor()
     cursor.execute(sql_command)
     con.commit()
     cursor.close()
     con.close()
+
 
 
 def db_execute_query(sql_query):
@@ -435,6 +444,10 @@ def search_messages(search, channel=None):
 
 def init_db():
     print("Initializing database...")
+    
+    # database = """
+    #     CREATE DATABASE "testDBv2"
+    # """
     users_table = """
             CREATE TABLE IF NOT EXISTS users(
                 id TEXT PRIMARY KEY,
@@ -465,13 +478,20 @@ def init_db():
                 FOREIGN KEY (channel) REFERENCES channels (id)
             );"""
 
+    # db_execute_command(database)
     db_execute_command(users_table)
     db_execute_command(channels_table)
     db_execute_command(messages_table)
 
 
 def export_slack_data():
-    init_db()
+    db_type = os.getenv('DB_TYPE'); 
+
+    if db_type == "MSQLS":  
+        msqls.init_db()
+    else: 
+         init_db()
+   
 
     print("Exporting slack data...")
     users = user_list()
@@ -546,8 +566,10 @@ def main():
 
     if args.init:
         try:
+            # asyncio.run(export_slack_data())
             export_slack_data()
         except Exception as e:
+            print(e)
             print(f"The application is already initialized")
 
     if args.dch:
