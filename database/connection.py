@@ -12,7 +12,7 @@ DB_NAME = 'slack.db'
 def db_connection():
     db_type = os.getenv('DB_TYPE'); 
     con = None
-    print("this is the file connection", env_file)
+    print("💾 Connection :", os.getenv("DB_DRIVER"))
     connectionString = f"""
             DRIVER={{{os.getenv("DB_DRIVER")}}};
             SERVER={{{os.getenv("DB_SERVER")}}};
@@ -20,7 +20,7 @@ def db_connection():
             TRUSTED_CONNECTION={{{os.getenv("DB_TRUSTED_CONNECTION")}}};
         """
     if db_type == "MSQLS":  
-        con = pyodbc.connect(connectionString, autocommit=True)
+        con = pyodbc.connect(connectionString)
         con.autocommit = True
     else: 
         con = sqlite3.connect(DB_NAME)

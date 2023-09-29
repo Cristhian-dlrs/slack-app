@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import os
 import sys
-sys.path.insert(1, './database/', 1, "./database/migrations")
+
+
 
 import requests
 import json
@@ -13,8 +14,10 @@ from time import sleep
 import sqlite3
 import pyodbc
 import asyncio
-import connection
-import msqls
+from database import connection
+from database.migrations import msqls
+
+
 
 DB_NAME = 'slack.db'
 # when rate-limited, add this to the wait time
@@ -486,20 +489,23 @@ def init_db():
 
 def export_slack_data():
     db_type = os.getenv('DB_TYPE'); 
-
-    if db_type == "MSQLS":  
-        msqls.init_db()
-    else: 
-         init_db()
-   
-
-    print("Exporting slack data...")
     users = user_list()
-    save_users(users)
 
-    channels = channel_list()
-    save_channels(channels)
-    print("Application initialization completed!")
+    if db_type == "MSQLS":
+        msqls.init_db()
+        
+
+    else: 
+        init_db()
+        print("Exporting slack data...")
+    
+        save_users(users)
+
+        channels = channel_list()
+        save_channels(channels)
+        print("Application initialization completed!")
+
+    
 
 
 def main():
