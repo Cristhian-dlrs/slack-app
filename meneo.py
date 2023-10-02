@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 import os
 import sys
-
-
-
 import requests
 import json
 import time
@@ -12,12 +9,9 @@ import argparse
 from dotenv import load_dotenv
 from time import sleep
 import sqlite3
-import pyodbc
-import asyncio
 from database import connection
 from database.migrations import msqls
-
-
+from database.entities import user as userEntity, message as messageEntity
 
 DB_NAME = 'slack.db'
 # when rate-limited, add this to the wait time
@@ -194,7 +188,7 @@ def channel_list(team_id=None, response_url=None):
 def channel_history(channel_id, response_url=None, oldest=None, latest=None):
     params = {
         "channel": channel_id,
-        "limit": 200,
+        # "limit": 200,
     }
 
     if oldest is not None:
@@ -490,18 +484,19 @@ def init_db():
 def export_slack_data():
     db_type = os.getenv('DB_TYPE'); 
     users = user_list()
+    channels = channel_list()
 
     if db_type == "MSQLS":
         msqls.init_db()
+        userEntity.create_recursive(users)
+        messageEntity.create_recursive(channels)
         
-
     else: 
         init_db()
         print("Exporting slack data...")
     
         save_users(users)
 
-        channels = channel_list()
         save_channels(channels)
         print("Application initialization completed!")
 
