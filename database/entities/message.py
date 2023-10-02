@@ -2,6 +2,7 @@ from database.entities.channel import create as create_channel, find as find_cha
 from meneo import channel_history
 from ..migrations import msqls
 
+
 def create(type, text, ts, user_id, channel_id):
     msqls.db_execute_command(
         "INSERT INTO messages VALUES (?, ?, ?, ?, ?)",
@@ -17,8 +18,9 @@ def create_recursive(list: list):
     if item is None:
         return
 
+    # print("Loading Messages")
     messages = channel_history(item["id"])
-
+    # print("Loaded Messages")
     if not messages:
         print("Not Message in this channel", item["id"])
         create_recursive(list)
