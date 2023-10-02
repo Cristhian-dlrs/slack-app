@@ -1,7 +1,5 @@
 
 from ..connection import db_connection
-# from ..entities import user
-
 con = db_connection()
 
 

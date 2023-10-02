@@ -2,13 +2,6 @@ from database.entities.channel import create as create_channel, find as find_cha
 from meneo import channel_history
 from ..migrations import msqls
 
-# channel["id"],
-#                          channel["name"] if "name" in channel
-#                          else user_name(channel["user"]),
-#                          channel["user"] if "user" in channel else "IS GROUP",
-#                          0)
-
-
 def create(type, text, ts, user_id, channel_id):
     msqls.db_execute_command(
         "INSERT INTO messages VALUES (?, ?, ?, ?, ?)",
